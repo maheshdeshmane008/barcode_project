@@ -1,0 +1,226 @@
+{% extends 'include/base.html' %}
+{% load static %}
+{% block title %}Access Role{% endblock %}
+{% block content %}
+
+<div class="page-body">
+    
+    <div class="container-fluid">
+      <div class="row">
+        <div class="col-sm-12">
+          <div class="card">
+            <div class="card-body">
+              <div class="form theme-form">
+                <form id="form" action="{% url 'accessrole' %}" method="POST" enctype="multipart/form-data">
+                  {% csrf_token %}
+                  <input type="hidden" id="accessrole_id" name="accessrole_id">
+                <div class="row">
+                
+                  <div class="col-sm-4">
+                    <div class="mb-3">
+                      <label><i class="fa fa-chevron-right" aria-hidden="true"></i>Access Role Name<span class="imp">*</span></label>
+                      <input type="text" id="accessrole" name="accessrole"  placeholder="Access Role Name" class="form-control">
+                      <label id="accessrole-error" class="error" style="display:none;"></label>
+                    </div>
+                  </div>
+
+                  
+                </div>
+                <div class="col-md-6 messages">
+                    <div class="form-error" id="form-error">
+                        {% include 'include/message.html' %}
+                    </div>
+                    <div class="form-success" id="form-success">
+                    
+                    </div>
+                </div>  
+                <div class="row">
+                  <div class="col">
+                    <div class="text-end">
+                      {% if permissions.can_insert %}
+                      <a class="btn btn-success me-3 add" href="#" id="add-btn">Add</a>
+                      {% endif %}
+                      {% if permissions.can_update %}
+                      <a class="btn btn-primary me-3 update" href="#" id="update-btn" style="display: none;">Update</a>
+                      <a class="btn btn-secondary me-3" href="#" id="cancel-btn" style="display: none;">Cancel</a>
+                      {% endif %}
+                    </div>
+                  </div>
+                </div>
+              
+        
+              </div>
+              
+              </form>
+            </div>
+          </div>
+          <div class="card-body">
+              <div class="table-responsive custom-scrollbar">
+                  <table class="display" id="basic-1">
+                    <thead>
+                      <tr>
+                          <th>Access Rolee</th>
+                          <th>Date</th>
+                          <th>Status</th>
+                          <th>Actions</th>
+                      </tr>
+                    </thead >
+                   <tbody id="results">
+                      {% for data in access %}
+                    <tr>
+                      <td>{{data.name}}</td>
+                      <td>{{data.date}}</td>
+                      <td>
+                          {% if data.status == "1" %}
+                              <span class="badge bg-success">Active</span>
+                          {% else %}
+                              <span class="badge bg-danger">Inactive</span>
+                          {% endif %}
+                      </td>
+                      <td>
+                        {% if permissions.can_update %}
+                          <button class="btn btn-primary btn-sm edit-btn"
+                                  data-id="{{ data.id }}"
+                                  data-name="{{ data.name }}">
+                              Edit
+                          </button>
+                          {% endif %}
+                          {% if permissions.can_delete %} <a href="{% url 'access-delete' data.id %}" class="btn btn-danger btn-sm delete-btn">Delete</a>{% endif %}
+                      </td>
+                    </tr>
+                    {% endfor %}
+                   </tbody>
+                  </table>
+              </div>
+          </div>
+        </div>
+      
+        </div>
+      </div>
+    </div>
+    </div>
+    <script type="text/javascript" src={% static "js/jquery.validate.min.js" %} ></script>
+    <script>
+        // Event listener for the "Edit" buttons
+        $(document).on("click", ".edit-btn", function() {
+            // Get the data from the button's data attributes
+            var accessId = $(this).data('id');
+            var accessName = $(this).data('name');
+
+            // Populate the form fields with the data
+            $('#accessrole_id').val(accessId);
+            $('#accessrole').val(accessName);
+            
+            // Show the "Update" and "Cancel" buttons and hide "Add"
+            $('#add-btn').hide();
+            $('#update-btn').show();
+            $('#cancel-btn').show();
+        });
+
+        // Event listener for the "Cancel" button
+        $(document).on("click", "#cancel-btn", function() {
+            $('#form')[0].reset();
+            $('#accessrole_id').val(''); // Clear the ID field
+            
+            // Show "Add" button and hide "Update" and "Cancel"
+            $('#add-btn').show();
+            $('#update-btn').hide();
+            $('#cancel-btn').hide();
+            
+            $('.error').hide(); // Hide validation errors
+            $('#form-error').hide(); // Hide the general error message
+        });
+
+        // Function to handle the AJAX form submission
+        function handleFormSubmission(event) {
+            event.preventDefault();
+            $('.error').hide(); // Hide all previous errors
+            $('#form-error').hide(); // Hide the general error message
+
+            // Run client-side validation first
+            if (!$("#form").valid()) {
+                return; // Stop if validation fails
+            }
+
+            var csrftoken = $('input[name="csrfmiddlewaretoken"]').val(); 
+            var url = $('#form').attr('action');
+            var formData = new FormData();
+            formData.append('accessrole_id', $('#accessrole_id').val());
+            formData.append('accessrole', $('#accessrole').val());
+
+            $.ajax({
+                url: url,
+                type: 'POST',
+                data: formData,
+                contentType: false,
+                processData: false,
+                headers: {
+                    'X-CSRFToken': csrftoken,
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                success: function(response) {
+                    if (response.success) {
+                        $('#form')[0].reset();
+                        $('#form-error').text('');
+                        $('#form-success').addClass('alert alert-sm alert-success');
+                        $('#form-success').text(response.message);
+                        
+                        // Reset button state to "Add" mode
+                        $('#add-btn').show();
+                        $('#update-btn').hide();
+                        $('#cancel-btn').hide();
+
+                        setTimeout(function() {
+                            $('#form-success').html('');
+                            $('#form-success').removeClass('alert alert-sm alert-success');
+                            window.location.reload();
+                        }, 1000);
+                    } else {
+                        // Display server-side errors
+                        $.each(response.errors, function(field, errors) { 
+                             if (field === 'general') {
+                                $('#form-error').addClass('alert alert-sm alert-danger');
+                                $('#form-error').text(errors[0]).show();
+                            } else {
+                                $('#' + field + '-error').text(errors[0]).show();
+                            }
+                        });
+                    }
+                },
+                error: function(xhr, status, error) {
+                    try {
+                        var response = JSON.parse(xhr.responseText);
+                        if (response.errors && response.errors.general) {
+                            $('#form-error').addClass('alert alert-sm alert-danger');
+                            $('#form-error').text(response.errors.general[0]).show();
+                        } else {
+                            $('#form-error').addClass('alert alert-sm alert-danger');
+                            $('#form-error').text('An unknown error occurred.').show();
+                        }
+                    } catch (e) {
+                        $('#form-error').addClass('alert alert-sm alert-danger');
+                        $('#form-error').text('An error occurred: ' + xhr.status + ' ' + xhr.statusText).show();
+                    }
+                }
+            });
+        }
+            
+        // Event listeners for the new buttons
+        $(document).on("click", "#add-btn", handleFormSubmission);
+        $(document).on("click", "#update-btn", handleFormSubmission);
+
+        $("#form").validate({
+            rules: { 
+                accessrole: {
+                    required: true,      
+                },  
+            },
+            messages: {
+                accessrole: {
+                    required: "Please Enter Access Role Name",              
+                }, 
+            },
+        });
+    </script>
+        
+{% endblock %}

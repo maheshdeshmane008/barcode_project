@@ -1,0 +1,290 @@
+{% extends 'include/base.html' %}
+{% load static %}
+{% block title %}Location{% endblock %}
+{% block content %}
+
+<div class="page-body">
+    
+    <div class="container-fluid">
+      <div class="row">
+        <div class="col-sm-12">
+          <div class="card">
+            <div class="card-body">
+              <div class="form theme-form">
+                <form id="form" action="{% url 'location' %}" method="POST" enctype="multipart/form-data">
+                  {% csrf_token %}
+                  <input type="hidden" id="location_id" name="location_id">
+                <div class="row">
+                
+                  <div class="col-sm-4">
+                    <div class="mb-3">
+                      <label><i class="fa fa-chevron-right" aria-hidden="true"></i>Location Name<span class="imp">*</span></label>
+                      <input type="text" id="location" name="location"  placeholder="Location Name" class="form-control">
+                      <label id="location-error" class="error" style="display:none;"></label>
+                    </div>
+                  </div>
+
+                  <div class="col-sm-4">
+                    <div class="mb-3">
+                      <label><i class="fa fa-chevron-right" aria-hidden="true"></i>Files Upload Path<span class="imp">*</span></label>
+                      <input type="text" id="upload_path" name="upload_path"  placeholder="File Upload Path" class="form-control">
+                      <label id="upload_path-error" class="error" style="display:none;"></label>
+                    </div>
+                  </div>
+
+                  <div class="col-sm-4">
+                    <div class="mb-3">
+                      <label><i class="fa fa-chevron-right" aria-hidden="true"></i>Print Address<span class="imp">*</span></label>
+                      <input type="text" id="print_path" name="print_path"  placeholder="Print Address" class="form-control">
+                      <label id="print_path-error" class="error" style="display:none;"></label>
+                    </div>
+                  </div>
+
+                  <div class="col-sm-4">
+                    <div class="mb-3">
+                      <label><i class="fa fa-chevron-right" aria-hidden="true"></i>Files Download Path<span class="imp">*</span></label>
+                      <input  type="text" id="download_path" name="download_path" placeholder="Files Download Path"   class="form-control">
+                      <label id="download_path-error" class="error" style="display:none;"></label>
+                    </div>
+                  </div>
+                
+                </div>
+                <div class="col-md-6 messages">
+                    <div class="form-error" id="form-error">
+                        {% include 'include/message.html' %}
+                    </div>
+                    <div class="form-success" id="form-success">
+                    
+                    </div>
+                </div>  
+                <div class="row">
+                  <label id="general-error" class="error" style="display:none;"></label>
+                  <div class="col">
+                    <div class="text-end">
+                      {% if permissions.can_insert %}
+                      <a class="btn btn-success me-3 add" href="#" id="add-btn">Add</a>
+                      {% endif %}
+                      {% if permissions.can_update %}
+                      <a class="btn btn-primary me-3 update" href="#" id="update-btn" style="display: none;">Update</a>
+                      <a class="btn btn-secondary me-3" href="#" id="cancel-btn" style="display: none;">Cancel</a>
+                      {% endif %}
+                    </div>
+                  </div>
+                </div>
+              
+        
+              </div>
+              
+              </form>
+            </div>
+          </div>
+          <div class="card-body">
+              <div class="table-responsive custom-scrollbar">
+                  <table class="display" id="basic-1">
+                    <thead>
+                      <tr>
+                          <th>Location Name</th>
+                          <th>Upload Path</th>
+                          <th>Print Path</th>
+                          <th>Download Path</th>
+                          <th>Date</th>
+                          <th>Status</th>
+                          <th>Actions</th>
+                      </tr>
+                    </thead >
+                   <tbody id="results">
+                      {% for data in location %}
+                    <tr>
+                      <td>{{data.name}}</td>
+                      <td>{{data.upload_path}}</td>
+                      <td>{{data.print_path}}</td>
+                      <td>{{data.download_path}}</td>
+                      <td>{{data.date}}</td>
+                      <td>
+                          {% if data.status == "1" %}
+                              <span class="badge bg-success">Active</span>
+                          {% else %}
+                              <span class="badge bg-danger">Inactive</span>
+                          {% endif %}
+                      </td>
+                      <td>
+                        {% if permissions.can_update %}
+                          <button class="btn btn-primary btn-sm edit-btn"
+                                  data-id="{{ data.id }}"
+                                  data-name="{{ data.name }}"
+                                  data-upload-path="{{ data.upload_path }}"
+                                  data-print-path="{{ data.print_path }}"
+                                  data-download-path="{{ data.download_path }}">
+                              Edit
+                          </button>
+                          {% endif %}
+                          {% if permissions.can_delete %}
+                          <a href="{% url 'location-delete' data.id %}" class="btn btn-danger btn-sm delete-btn">Delete</a>{% endif %}
+                      </td>
+                    </tr>
+                    {% endfor %}
+                   </tbody>
+                  </table>
+              </div>
+          </div>
+        </div>
+      
+        </div>
+      </div>
+    </div>
+    </div>
+    <script type="text/javascript" src={% static "js/jquery.validate.min.js" %} ></script>
+    <script>
+        // Event listener for the "Edit" buttons in the table
+        $(document).on("click", ".edit-btn", function() {
+            // Get the data from the button's data attributes
+            var locationId = $(this).data('id');
+            var locationName = $(this).data('name');
+            var uploadPath = $(this).data('upload-path');
+            var printPath = $(this).data('print-path');
+            var downloadPath = $(this).data('download-path');
+
+            // Populate the form fields with the data
+            $('#location_id').val(locationId);
+            $('#location').val(locationName);
+            $('#upload_path').val(uploadPath);
+            $('#print_path').val(printPath);
+            $('#download_path').val(downloadPath);
+
+            // Hide the "Add" button and show the "Update" and "Cancel" buttons
+            $('#add-btn').hide();
+            $('#update-btn').show();
+            $('#cancel-btn').show();
+            $('.error').hide(); // Hide validation errors
+            $('#form-error').hide(); // Hide the general error message
+        });
+
+        // Event listener for the "Cancel" button
+        $(document).on("click", "#cancel-btn", function() {
+            $('#form')[0].reset();
+            $('#location_id').val(''); // Clear the ID field
+            
+            // Hide "Update" and "Cancel" and show "Add"
+            $('#add-btn').show();
+            $('#update-btn').hide();
+            $('#cancel-btn').hide();
+            
+            $('.error').hide(); // Hide validation errors
+            $('#form-error').hide(); // Hide the general error message
+        });
+        
+        // Function to handle the AJAX form submission
+        function handleFormSubmission(event) {
+            event.preventDefault();
+            $('.error').hide(); // Hide all previous errors
+            $('#form-error').hide(); // Hide the general error message
+
+            // Run client-side validation first
+            if (!$("#form").valid()) {
+                return; // Stop if validation fails
+            }
+
+            var csrftoken = $('input[name="csrfmiddlewaretoken"]').val(); 
+            var url = $('#form').attr('action');
+            var formData = new FormData();
+            formData.append('location_id', $('#location_id').val());
+            formData.append('location', $('#location').val());
+            formData.append('upload_path', $('#upload_path').val());
+            formData.append('print_path', $('#print_path').val());
+            formData.append('download_path', $('#download_path').val());
+            
+            $.ajax({
+                url: url,
+                type: 'POST',
+                data: formData,
+                contentType: false,
+                processData: false,
+                headers: {
+                    'X-CSRFToken': csrftoken,
+                    'X-Requested-With': 'XMLHttpRequest' // Add this header to indicate AJAX request
+                },
+                success: function(response) {
+                    // This block runs only on successful requests (status 200 OK)
+                    if (response.success) {
+                        $('#form')[0].reset();
+                        $('#form-error').text('');
+                        $('#form-success').addClass('alert alert-sm alert-success');
+                        $('#form-success').text(response.message);
+                        
+                        // Reset button state to "Add" mode
+                        $('#add-btn').show();
+                        $('#update-btn').hide();
+                        $('#cancel-btn').hide();
+
+                        setTimeout(function() {
+                            $('#form-success').html('');
+                            $('#form-success').removeClass('alert alert-sm alert-success');
+                            window.location.reload();
+                        }, 1000);
+                    } else {
+                        // Display server-side form validation errors
+                        $.each(response.errors, function(field, errors) { 
+                            if (field === 'general') {
+                                $('#form-error').addClass('alert alert-sm alert-danger');
+                                $('#form-error').text(errors[0]).show();
+                            } else {
+                                $('#' + field + '-error').text(errors[0]).show();
+                            }
+                        });
+                    }
+                },
+                error: function(xhr, status, error) {
+                    // This block runs for status codes like 403, 404, 500 etc.
+                    try {
+                        var response = JSON.parse(xhr.responseText);
+                        if (response.errors && response.errors.general) {
+                            $('#form-error').addClass('alert alert-sm alert-danger');
+                            $('#form-error').text(response.errors.general[0]).show();
+                        } else {
+                            $('#form-error').addClass('alert alert-sm alert-danger');
+                            $('#form-error').text('An unknown error occurred.').show();
+                        }
+                    } catch (e) {
+                        $('#form-error').addClass('alert alert-sm alert-danger');
+                        $('#form-error').text('An error occurred: ' + xhr.status + ' ' + xhr.statusText).show();
+                    }
+                }
+            });
+        }
+
+        // Event listeners for the new buttons
+        $(document).on("click", "#add-btn", handleFormSubmission);
+        $(document).on("click", "#update-btn", handleFormSubmission);
+            
+        $("#form").validate({
+            rules: { 
+                location: {
+                    required: true, 
+                }, 
+                upload_path: {
+                    required: true, 
+                },
+                print_path: {
+                    required: true, 
+                },
+                download_path: {
+                    required: true, 
+                }, 
+            },
+            messages: {
+                location: {
+                    required: "Please Enter Location", 
+                }, 
+                upload_path: {
+                    required: "Please Enter Files Upload Path", 
+                }, 
+                print_path: {
+                    required: "Please Enter Print Address", 
+                }, 
+                download_path: {
+                    required: "Please Enter Files Download Path", 
+                }, 
+            },
+        });
+    </script>
+{% endblock %}

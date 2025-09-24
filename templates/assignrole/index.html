@@ -1,0 +1,256 @@
+{% extends 'include/base.html' %}
+{% load static %}
+{% block title %}Assign Role{% endblock %}
+{% block content %}
+
+<div class="page-body">
+  <div class="container-fluid">
+    <div class="row">
+      <div class="col-sm-12">
+        <div class="card">
+          <div class="card-body">
+            <div class="form theme-form">
+              <form id="form" action="{% url 'assignrole' %}" method="POST" enctype="multipart/form-data">
+                {% csrf_token %}
+                <!-- Hidden field to store the ID for editing -->
+                <input type="hidden" id="accessrole_id" name="accessrole_id">
+              <div class="row">
+              
+                <div class="col-sm-4">
+                  <div class="mb-3">
+                    <label><i class="fa fa-chevron-right" aria-hidden="true"></i>Access Role<span class="imp">*</span></label>
+                    <select class="form-select" name="type" id="type">
+                      <option value="">Select Role</option>
+                        {% for data in access %}
+                      <option value="{{data.id}}">{{data.name}}</option>
+                      {% endfor %}
+                    </select>
+                    <label id="accessrole-error" class="error" style="display:none;"></label>
+                  </div>
+                </div>         
+                
+              </div>
+  
+              <div class="row">
+                <div class="col-sm-12">
+                  <a  class="btn btn-warning btn-cons-md check" >Check All </a>
+                  <a  class="btn btn-primary btn-cons-md uncheck" >Uncheck </a> 
+                <div class="table-responsive custom-scrollbar">
+                  <table class="table">
+                    <thead>
+                      <tr>
+                          <th style="display: none;">ID</th>
+                          <th>Module Name</th>
+                          <th>Page Name</th>
+                          <th>Read</th>
+                          <th>Insert</th>
+                          <th>Edit</th>
+                          <th>Delete</th>
+                      </tr>
+                    </thead >
+                   <tbody id="results">
+                      
+                     {% for data1 in pagelist %}
+                                                              
+                    <tr>
+                        <td style="display: none;"><input type="text"  class="form-control page_id" value="{{data1.id}}"></td>
+                        <td><input type="text"  class="form-control module_name" value="{{data1.module_name}}" readonly></td>
+                        <td><input type="text"  class="form-control display_name" value="{{data1.display_name}}" readonly></td>
+                        <td><input type="checkbox"  class="form-check-input read checkbox" value="1"></td>
+                        <td><input type="checkbox"  class="form-check-input insert checkbox" value="1"></td>
+                        <td><input type="checkbox"  class="form-check-input update checkbox" value="1"></td>
+                        <td><input type="checkbox"  class="form-check-input delete checkbox" value="1"></td>
+                    </tr>
+                    {% endfor %}
+                   </tbody>
+                  </table>
+                </div>
+                </div>
+              </div>
+              <div class="col-md-6 messages">
+                  <div class="form-error" id="form-error">
+                      {% include 'include/message.html' %}
+                  </div>
+                  <div class="form-success" id="form-success">
+                  
+                  </div>
+              </div>  
+              <div class="row">
+                <div class="col">
+                  <div class="text-end">
+                    {% if permissions.can_insert %}
+                    <a class="btn btn-success me-3 add" href="#" id="submit-btn">Add</a>
+                    <a class="btn btn-secondary me-3" href="#" id="cancel-btn" style="display: none;">Cancel</a>
+                    {% endif %}
+                  </div>
+                </div>
+              </div>
+            
+          
+            </div>
+            
+            </form>
+          </div>
+        </div>
+       
+      </div>
+    
+      </div>
+    </div>
+  </div>
+  </div>
+    </div>
+    
+    <script type="text/javascript" src={% static "js/jquery.validate.min.js" %} ></script>
+  <script>
+ // Check All and Uncheck All functionality
+$(".check").click(function() {
+    $(".checkbox").prop('checked', true);
+});
+
+$(".uncheck").click(function() {
+    $(".checkbox").prop('checked', false);
+});
+
+// Event listener for the "Edit" buttons
+// NOTE: This part is for editing the main AccessRole, not the page permissions.
+$(document).on("click", ".edit-btn", function() {
+    var accessId = $(this).data('id');
+    var accessName = $(this).data('name');
+
+    $('#accessrole_id').val(accessId);
+    $('#type').val(accessId); // Set the selected role in the dropdown
+    
+    // Change the button text and show the cancel button
+    $('#submit-btn').text('Update');
+    $('#cancel-btn').show();
+    
+    // You would typically fetch the permissions for this role from the server
+    // and populate the checkboxes here. This requires a separate AJAX call.
+    // For now, we only handle the form submission.
+});
+
+// Event listener for the "Cancel" button
+$(document).on("click", "#cancel-btn", function() {
+    $('#form')[0].reset();
+    $('#accessrole_id').val('');
+    $('#submit-btn').text('Add');
+    $('#cancel-btn').hide();
+    $('.error').hide();
+});
+
+// Event listener for the Access Role dropdown to fetch permissions
+$('#type').change(function() {
+    var accessRoleId = $(this).val();
+    
+    // Clear all checkboxes when a new role is selected
+    $('.checkbox').prop('checked', false);
+    
+    if (accessRoleId) {
+        // Make an AJAX call to get existing permissions for the selected role
+        $.ajax({
+            url: `/assignrole/get_permissions/${accessRoleId}/`,
+            type: 'GET',
+            success: function(response) {
+                if (response.success) {
+                    // Loop through the permissions and check the corresponding checkboxes
+                    response.permissions.forEach(function(perm) {
+                        var row = $(`#results tr:has(input[value="${perm.page_id}"])`);
+                        if (row.length) {
+                            if (perm.view) {
+                                row.find('.read').prop('checked', true);
+                            }
+                            if (perm.insert) {
+                                row.find('.insert').prop('checked', true);
+                            }
+                            if (perm.update) {
+                                row.find('.update').prop('checked', true);
+                            }
+                            if (perm.delete) {
+                                row.find('.delete').prop('checked', true);
+                            }
+                        }
+                    });
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('Error fetching permissions:', error);
+            }
+        });
+    }
+});
+
+// Event listener for the form submission
+$(document).on("click", "#submit-btn", function(event) {
+    event.preventDefault();
+    $('.error').hide();
+    
+    // Get the selected access role ID
+    var accessRoleId = $('#type').val();
+    if (!accessRoleId) {
+        $('#accessrole-error').text('Please select an Access Role.').show();
+        return;
+    }
+
+    // Collect all assigned page permissions from the table
+    var assignedPages = [];
+    $('#results tr').each(function() {
+        var row = $(this);
+        var pageId = row.find('.page_id').val();
+        
+        // Check if the page row exists
+        if (pageId) {
+            var permissions = {
+                'page_id': pageId,
+                'view': row.find('.read').is(':checked'),
+                'insert': row.find('.insert').is(':checked'),
+                'update': row.find('.update').is(':checked'),
+                'delete': row.find('.delete').is(':checked')
+            };
+            assignedPages.push(permissions);
+        }
+    });
+    
+    var csrftoken = $('input[name="csrfmiddlewaretoken"]').val(); 
+    var url = $('#form').attr('action');
+    
+    var data = {
+        'access_role_id': accessRoleId,
+        'assigned_pages': assignedPages,
+    };
+
+    $.ajax({
+        url: url,
+        type: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify(data),
+        headers: {
+            'X-CSRFToken': csrftoken
+        },
+        success: function(response) {
+            if (response.success) {
+                $('#form')[0].reset();
+                $('#form-error').text('');
+                $('#form-success').addClass('alert alert-sm alert-success');
+                $('#form-success').text(response.message);
+                $('#submit-btn').text('Add');
+                $('#cancel-btn').hide();
+                setTimeout(function() {
+                    $('#form-success').html('');
+                    $('#form-success').removeClass('alert alert-sm alert-success');
+                    window.location.reload();
+                }, 1000);
+            } else {
+                $.each(response.errors, function(field, errors) { 
+                    $('#' + field + '-error').text(errors[0]).show();
+                });
+            }
+        },
+        error: function(xhr, status, error) {
+            $('#form-error').text('An error occurred. Please try again.').show();
+        }
+    });
+});
+  </script>
+        
+{% endblock %}

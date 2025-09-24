@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Barcode Search</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 text-gray-800 p-8">
+
+    <div class="container mx-auto bg-white p-8 md:p-12 rounded-lg shadow-xl">
+        <h1 class="text-3xl font-bold text-blue-700 mb-6">Search Barcode</h1>
+
+        <div class="flex flex-col md:flex-row gap-4 mb-8">
+            <input type="text" id="barcodeInput" placeholder="Scan or type barcode number here..."
+                   class="flex-1 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 " autofocus/>
+        </div>
+
+        <div id="resultsSection" class="hidden">
+            <h2 class="text-2xl font-semibold text-gray-700 mb-4 border-b pb-2">Search Results</h2>
+            <div id="fileTableContainer" class="overflow-x-auto mb-8">
+            </div>
+            <div id="statusMessage" class="hidden text-center text-gray-600 mb-4"></div>
+            
+            <div class="flex items-center gap-4" id="actionButtons">
+                <button id="printSelected" class="py-2 px-6 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-colors duration-200">
+                    Print Selected Files
+                </button>
+                <button id="markSelectedAsPrinted" class="py-2 px-6 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors duration-200">
+                    Mark Selected as Printed
+                </button>
+            </div>
+        </div>
+
+        <div id="noResults" class="hidden text-center text-gray-600">
+            <p>No results found for this barcode.</p>
+        </div>
+    </div>
+
+    <script>
+        const barcodeInput = document.getElementById('barcodeInput');
+        const resultsSection = document.getElementById('resultsSection');
+        const fileTableContainer = document.getElementById('fileTableContainer');
+        const actionButtons = document.getElementById('actionButtons');
+        const printSelectedButton = document.getElementById('printSelected');
+        const markSelectedAsPrintedButton = document.getElementById('markSelectedAsPrinted');
+        const noResultsDiv = document.getElementById('noResults');
+        const statusMessageDiv = document.getElementById('statusMessage');
+
+        function fetchResults() {
+            const barcodeValue = barcodeInput.value.trim();
+            if (barcodeValue === '') {
+                resultsSection.classList.add('hidden');
+                noResultsDiv.classList.add('hidden');
+                return;
+            }
+
+            const barcodes = [barcodeValue];
+
+            statusMessageDiv.textContent = 'Searching...';
+            statusMessageDiv.classList.remove('hidden');
+            resultsSection.classList.remove('hidden');
+            noResultsDiv.classList.add('hidden');
+            
+            fetch('/search-barcode/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({ 'barcodes': barcodes })
+            })
+            .then(response => response.json())
+            .then(data => {
+                statusMessageDiv.classList.add('hidden');
+
+                if (data.success && data.labels.length > 0) {
+                    const existingTableBody = fileTableContainer.querySelector('tbody');
+                    const newLabels = data.labels.filter(label => {
+                        return !fileTableContainer.querySelector(`tr[data-label-id="${label.id}"]`);
+                    });
+
+                    if (newLabels.length > 0) {
+                        let rowsHtml = newLabels.map(label => `
+                            <tr class="border-t border-gray-200" data-label-id="${label.id}">
+                                <td class="py-3 px-4 text-center">
+                                    <input type="checkbox" name="label_id" value="${label.id}">
+                                </td>
+                                <td class="py-3 px-4">${label.file_name}</td>
+                                <td class="py-3 px-4">${label.user}</td>
+                                <td class="py-3 px-4">
+                                    <span class="font-bold ${label.status === 1 ? 'text-green-600' : 'text-red-600'}">
+                                        ${label.status === 1 ? 'Success' : 'Failed'}
+                                    </span>
+                                </td>
+                                <td class="py-3 px-4">
+                                    <ul class="list-disc list-inside">
+                                        ${label.barcodes.map(b => `<li>${b}</li>`).join('')}
+                                    </ul>
+                                </td>
+                                <td class="py-3 px-4">
+                                    <span class="font-bold print-status-span ${label.print_download_status === 0 ? 'text-blue-600' : label.print_download_status === 1 ? 'text-gray-400' : 'text-yellow-600'}">
+                                        ${label.print_download_status === 0 ? 'New' : label.print_download_status === 1 ? 'Printed' : 'Sent for Printing'}
+                                    </span>
+                                </td>
+                            </tr>
+                        `).join('');
+
+                        if (existingTableBody) {
+                            existingTableBody.innerHTML += rowsHtml;
+                        } else {
+                            const tableHtml = `
+                                <table class="min-w-full bg-white rounded-lg shadow-md">
+                                    <thead class="bg-blue-600 text-white">
+                                        <tr>
+                                            <th class="py-3 px-4 text-left w-12">
+                                                <input type="checkbox" id="selectAll">
+                                            </th>
+                                            <th class="py-3 px-4 text-left">File Name</th>
+                                            <th class="py-3 px-4 text-left">User</th>
+                                            <th class="py-3 px-4 text-left">Status</th>
+                                            <th class="py-3 px-4 text-left">Scanned Barcodes</th>
+                                            <th class="py-3 px-4 text-left">Print Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${rowsHtml}
+                                    </tbody>
+                                </table>
+                            `;
+                            fileTableContainer.innerHTML = tableHtml;
+                        }
+                        actionButtons.classList.remove('hidden');
+                        attachEventListeners();
+                    } else {
+                        statusMessageDiv.textContent = `Barcode "${barcodeValue}" is already in the list.`;
+                    }
+                } else {
+                    statusMessageDiv.textContent = `No results found for "${barcodeValue}".`;
+                }
+
+                barcodeInput.value = '';
+                barcodeInput.focus();
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                statusMessageDiv.textContent = 'An error occurred. Please try again.';
+                barcodeInput.value = '';
+                barcodeInput.focus();
+            });
+        }
+        
+        let typingTimer;
+        const doneTypingInterval = 500;
+
+        barcodeInput.addEventListener('keyup', (event) => {
+            clearTimeout(typingTimer);
+            if (event.key === 'Enter') {
+                fetchResults();
+            } else {
+                typingTimer = setTimeout(fetchResults, doneTypingInterval);
+            }
+        });
+
+        function getSelectedIds() {
+            const checkboxes = document.querySelectorAll('input[name="label_id"]:checked');
+            return Array.from(checkboxes).map(cb => cb.value);
+        }
+
+        function attachEventListeners() {
+            const selectAllCheckbox = document.getElementById('selectAll');
+            const checkboxes = document.querySelectorAll('input[name="label_id"]');
+
+            if (selectAllCheckbox) {
+                selectAllCheckbox.addEventListener('change', (e) => {
+                    checkboxes.forEach(checkbox => {
+                        checkbox.checked = e.target.checked;
+                    });
+                });
+            }
+
+            // Restore the full print functionality
+            printSelectedButton.addEventListener('click', () => {
+                const selectedIds = getSelectedIds();
+                if (selectedIds.length === 0) {
+                    alert('Please select at least one file to print.');
+                    return;
+                }
+
+                printSelectedButton.textContent = 'Processing...';
+                printSelectedButton.disabled = true;
+
+                fetch('/print-labels/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': '{{ csrf_token }}'
+                    },
+                    body: JSON.stringify({ 'ids': selectedIds })
+                })
+                .then(response => {
+                    if (response.ok) {
+                        return response.blob();
+                    }
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                })
+                .then(blob => {
+                    const pdfUrl = URL.createObjectURL(blob);
+                    window.open(pdfUrl, '_blank');
+                    URL.revokeObjectURL(pdfUrl);
+
+                    selectedIds.forEach(id => {
+                        const row = document.querySelector(`tr[data-label-id="${id}"]`);
+                        if (row) {
+                            const statusCell = row.querySelector('td:nth-child(6) span');
+                            if (statusCell) {
+                                statusCell.textContent = 'Sent for Printing';
+                                statusCell.className = 'font-bold print-status-span text-yellow-600';
+                            }
+                        }
+                    });
+                })
+                .catch(error => {
+                    console.error('Error during print process:', error);
+                    alert('An error occurred during printing. Please check the console for details and try again.');
+                })
+                .finally(() => {
+                    printSelectedButton.textContent = 'Print Selected Files';
+                    printSelectedButton.disabled = false;
+                });
+            });
+
+            // Restore the full 'Mark as Printed' functionality
+            markSelectedAsPrintedButton.addEventListener('click', () => {
+                const selectedIds = getSelectedIds();
+                if (selectedIds.length === 0) {
+                    alert('Please select at least one file to mark as printed.');
+                    return;
+                }
+
+                const confirmation = confirm('Are you sure you want to mark these labels as printed?');
+                if (confirmation) {
+                    markSelectedAsPrintedButton.textContent = 'Updating...';
+                    markSelectedAsPrintedButton.disabled = true;
+
+                    fetch('/update-selected-print-status/', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': '{{ csrf_token }}'
+                        },
+                        body: JSON.stringify({ 'ids': selectedIds })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            window.location.reload();
+                        } else {
+                            alert(data.message);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('An error occurred while updating status. Please try again.');
+                    })
+                    .finally(() => {
+                        markSelectedAsPrintedButton.textContent = 'Mark Selected as Printed';
+                        markSelectedAsPrintedButton.disabled = false;
+                    });
+                }
+            });
+        }
+    </script>
+</body>
+</html>

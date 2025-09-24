@@ -1,0 +1,128 @@
+{% extends 'include/base.html' %}
+{% load static %}
+{% block title %}Barcode App{% endblock %}
+{% block content %}
+
+<link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/2.0.8/css/dataTables.dataTables.css" />
+
+<div class="page-body">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-sm-12">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="form theme-form">
+                            <form id="exceptionForm">
+                                {% csrf_token %}
+                                <div class="row">
+                                    <div class="col-sm-4">
+                                        <div class="mb-3">
+                                            <label><i class="fa fa-chevron-right" aria-hidden="true"></i>From Date <span class="imp">*</span></label>
+                                            <input type="date" name="from_date" required class="form-control" />
+                                        </div>
+                                    </div>
+                                    <div class="col-sm-4">
+                                        <div class="mb-3">
+                                            <label><i class="fa fa-chevron-right" aria-hidden="true"></i>To Date<span class="imp">*</span></label>
+                                            <input type="date" name="to_date" required class="form-control" />
+                                        </div>
+                                    </div>
+                                </div>
+                                {% if permissions.can_insert %} 
+                                <div class="row">
+                                    <div class="col">
+                                        <div class="text-end">
+                                            <button type="submit" class="btn btn-success me-3">Search Exceptions</button>
+                                            <button type="button" class="btn btn-danger">Cancel</button>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endif %}
+                            </form>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive custom-scrollbar">
+                            <table class="display" id="basic-1">
+                                <thead>
+                                    <tr>
+                                        <th>Filename</th>
+                                        <th>Duplicate Barcode</th>
+                                        <th>Upload Date</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="results"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.datatables.net/2.0.8/js/dataTables.js"></script>
+<script>
+    let dataTable;
+
+    $(document).ready(function() {
+        // Initialize DataTables once when the page loads
+        // We initialize it with an empty dataset initially
+        dataTable = $('#basic-1').DataTable({
+            data: [],
+            columns: [
+                { title: "Filename" },
+                { title: "Duplicate Barcode" },
+                { title: "Upload Date" }
+            ],
+            searching: true // Keep the search functionality enabled
+        });
+
+        $("#exceptionForm").on("submit", function(event) {
+            event.preventDefault();
+
+            const fromDate = $('[name="from_date"]').val();
+            const toDate = $('[name="to_date"]').val();
+            
+            // Clear the table and show a "Searching..." message
+            dataTable.clear().draw();
+            $("#results").html('<tr><td colspan="3" class="text-center">Searching...</td></tr>');
+
+            $.ajax({
+                url: '{% url "search_exceptions" %}',
+                type: 'POST',
+                data: JSON.stringify({
+                    'from_date': fromDate,
+                    'to_date': toDate
+                }),
+                contentType: 'application/json',
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                success: function(data) {
+                    // Clear the loading message
+                    $("#results").empty();
+
+                    if (data.exceptions && data.exceptions.length > 0) {
+                        const rowData = data.exceptions.map(exc => [
+                            exc.file_name,
+                            exc.duplicate_barcode,
+                            exc.upload_date
+                        ]);
+                        
+                        // Use the DataTables API to add new rows and redraw the table
+                        dataTable.rows.add(rowData).draw();
+                    } else {
+                        // If no results, clear the table and show the "No results" message
+                        $("#results").html('<tr><td colspan="3" class="text-center">No exceptions found for this date range.</td></tr>');
+                    }
+                },
+                error: function(jqXHR, textStatus, errorThrown) {
+                    console.error('Error:', textStatus, errorThrown, jqXHR.responseText);
+                    $("#results").html('<tr><td colspan="3" class="text-center">An unexpected error occurred. Please try again.</td></tr>');
+                }
+            });
+        });
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Barcode Scan Results</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 text-gray-800 p-8">
+
+    <div class="container mx-auto bg-white p-8 md:p-12 rounded-lg shadow-xl">
+        <h1 class="text-3xl font-bold text-blue-700 mb-6">Barcode Scan Results</h1>
+
+        <div class="flex items-center justify-between mb-6">
+            <a href="{% url 'upload_pdf' %}" class="py-2 px-6 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors duration-200">
+                Upload More Files
+            </a>
+            <button id="printSelected" class="py-2 px-6 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-colors duration-200">
+                Print Selected Files
+            </button>
+            <button id="markSelectedAsPrinted" class="py-2 px-6 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors duration-200 ml-4 hidden">
+                Mark Selected as Printed
+            </button>
+        </div>
+
+        <h2 class="text-2xl font-semibold text-gray-700 mb-4 border-b pb-2">Processed Files</h2>
+        <div class="overflow-x-auto mb-8">
+            <table class="min-w-full bg-white rounded-lg shadow-md">
+                <thead class="bg-blue-600 text-white">
+                    <tr>
+                        <th class="py-3 px-4 text-left w-12">
+                            <input type="checkbox" id="selectAll">
+                        </th>
+                        <th class="py-3 px-4 text-left">File Name</th>
+                        <th class="py-3 px-4 text-left">User</th>
+                        <th class="py-3 px-4 text-left">Status</th>
+                        <th class="py-3 px-4 text-left">Scanned Barcodes</th>
+                        <th class="py-3 px-4 text-left">Print Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for label in labels %}
+                    <tr class="border-t border-gray-200" data-label-id="{{ label.id }}">
+                        <td class="py-3 px-4 text-center">
+                            <input type="checkbox" name="label_id" value="{{ label.id }}">
+                        </td>
+                        <td class="py-3 px-4">{{ label.path.name }}</td>
+                        <td class="py-3 px-4">{{ label.user }}</td>
+                        <td class="py-3 px-4">
+                            {% if label.status == 1 %}
+                                <span class="text-green-600 font-bold">Success</span>
+                            {% else %}
+                                <span class="text-red-600 font-bold">Failed</span>
+                            {% endif %}
+                        </td>
+                        <td class="py-3 px-4">
+                            {% if label.barcodes.all %}
+                                <ul class="list-disc list-inside">
+                                {% for barcode in label.barcodes.all %}
+                                    <li>{{ barcode.barcode_value }}</li>
+                                {% endfor %}
+                                </ul>
+                            {% else %}
+                                N/A
+                            {% endif %}
+                        </td>
+                        <td class="py-3 px-4">
+                            {% if label.print_download_status == 0 %}
+                                <span class="text-blue-600 font-bold">New</span>
+                            {% elif label.print_download_status == 1 %}
+                                <span class="text-gray-400 font-bold">Printed</span>
+                            {% else %}
+                                <span class="text-yellow-600 font-bold">Sent for Printing</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <h2 class="text-2xl font-semibold text-gray-700 mb-4 border-b pb-2">Duplicate Barcode Exceptions</h2>
+        {% if exceptions %}
+        <div class="overflow-x-auto">
+            <table class="min-w-full bg-white rounded-lg shadow-md">
+                <thead class="bg-red-600 text-white">
+                    <tr>
+                        <th class="py-3 px-4 text-left">File Name</th>
+                        <th class="py-3 px-4 text-left">Duplicate Barcode Value</th>
+                        <th class="py-3 px-4 text-left">Date Logged</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for exception in exceptions %}
+                    <tr class="border-t border-gray-200">
+                        <td class="py-3 px-4">{{ exception.file_name }}</td>
+                        <td class="py-3 px-4"><span class="text-red-500 font-bold">{{ exception.duplicate_barcode }}</span></td>
+                        <td class="py-3 px-4">{{ exception.upload_date|date:"Y-m-d H:i" }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-gray-600">No duplicate barcode exceptions found.</p>
+        {% endif %}
+    </div>
+
+    <script>
+        const selectAllCheckbox = document.getElementById('selectAll');
+        const printSelectedButton = document.getElementById('printSelected');
+        const markSelectedAsPrintedButton = document.getElementById('markSelectedAsPrinted');
+        const checkboxes = document.querySelectorAll('input[name="label_id"]');
+        const statusSpans = document.querySelectorAll('tbody tr td:nth-child(6) span');
+        const tableRows = document.querySelectorAll('tbody tr');
+        
+        selectAllCheckbox.addEventListener('change', (e) => {
+            checkboxes.forEach(checkbox => {
+                checkbox.checked = e.target.checked;
+            });
+        });
+
+        function getSelectedRows() {
+            return Array.from(checkboxes)
+                .filter(checkbox => checkbox.checked)
+                .map(checkbox => checkbox.closest('tr'));
+        }
+
+        printSelectedButton.addEventListener('click', () => {
+            const selectedRows = getSelectedRows();
+            const selectedIds = selectedRows.map(row => row.dataset.labelId);
+
+            if (selectedIds.length === 0) {
+                alert("Please select at least one file to print.");
+                return;
+            }
+
+            printSelectedButton.textContent = 'Processing...';
+            printSelectedButton.disabled = true;
+
+            fetch('{% url "print_labels" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({ 'ids': selectedIds })
+            })
+            .then(response => {
+                if (response.ok) {
+                    return response.blob(); 
+                }
+                throw new Error(`HTTP error! status: ${response.status}`);
+            })
+            .then(blob => {
+                const pdfUrl = URL.createObjectURL(blob); 
+                const newWindow = window.open(pdfUrl, '_blank'); 
+                if (newWindow) {
+                    newWindow.addEventListener('load', () => {
+                        URL.revokeObjectURL(pdfUrl);
+                    });
+                } else {
+                    alert('Popup blocker prevented the print window from opening. Please allow popups for this site.');
+                }
+                
+                // Update status on the page directly instead of reloading
+                selectedRows.forEach(row => {
+                    const statusCell = row.querySelector('td:nth-child(6)');
+                    statusCell.innerHTML = '<span class="text-yellow-600 font-bold">Sent for Printing</span>';
+                });
+                
+                // This is the key change: Hide the print button and show the mark as printed button
+                printSelectedButton.classList.add('hidden');
+                markSelectedAsPrintedButton.classList.remove('hidden');
+                
+            })
+            .catch(error => {
+                console.error('Error during print process:', error);
+                alert('An error occurred during printing. Please check the console for details and try again.');
+            })
+            .finally(() => {
+                printSelectedButton.textContent = 'Print Selected Files';
+                printSelectedButton.disabled = false;
+            });
+        });
+
+        markSelectedAsPrintedButton.addEventListener('click', () => {
+            const selectedRows = getSelectedRows();
+            const selectedIds = selectedRows.map(row => row.dataset.labelId);
+
+            if (selectedIds.length === 0) {
+                alert("Please select at least one file to mark as printed.");
+                return;
+            }
+            
+            const confirmation = confirm("Are you sure you want to mark these labels as printed?");
+            if (confirmation) {
+                markSelectedAsPrintedButton.textContent = 'Updating...';
+                markSelectedAsPrintedButton.disabled = true;
+
+                fetch('/update-selected-print-status/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': '{{ csrf_token }}'
+                    },
+                    body: JSON.stringify({ 'ids': selectedIds })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        window.location.reload();
+                    } else {
+                        alert(data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('An error occurred while updating status. Please try again.');
+                })
+                .finally(() => {
+                    markSelectedAsPrintedButton.textContent = 'Mark Selected as Printed';
+                    markSelectedAsPrintedButton.disabled = false;
+                });
+            }
+        });
+    </script>
+</body>
+</html>
